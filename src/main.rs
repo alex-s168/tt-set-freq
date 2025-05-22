@@ -81,7 +81,7 @@ fn main() -> Result<(), AppError> {
     })?;
 
     let current_clock = chip.inner.get_telemetry()?.ai_clk();
-    println!("new clock speed: {current_clock} MHz");
+    println!("new actual clock speed: {current_clock} MHz");
 
     Ok(())
 }
