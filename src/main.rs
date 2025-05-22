@@ -45,6 +45,7 @@ fn main() -> Result<(), AppError> {
     let mut target_dev = args.next()
         .map(|x| x.parse().map_err(|_| AppError::ArgNotValidFormat))
         .transpose()?;
+    let dump_telem = args.any(|x| x.as_str() == "dump");
 
     if target_dev.is_none() {
         let found = PciDevice::scan();
@@ -61,8 +62,14 @@ fn main() -> Result<(), AppError> {
     let arch = dev.borrow().device.arch;
     let chip = Chip::open(arch, CallbackStorage::new(luwen_ref::comms_callback, dev))?;
 
+    let telem = chip.inner.get_telemetry()?;
+
+    if dump_telem {
+        println!("{:?}", telem);
+    }
+
     println!("\nfound {arch} at PCI device {target_dev}");
-    let current_clock = chip.inner.get_telemetry()?.ai_clk();
+    let current_clock = telem.ai_clk();
     println!("current clock speed: {current_clock} MHz");
 
     let msg = match target_freq {
