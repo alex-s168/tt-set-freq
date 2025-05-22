@@ -20,6 +20,7 @@ enum AppError {
 enum TargetFreq {
     Min,
     Max,
+    Current,
     Abs(u32),
 }
 
@@ -28,8 +29,9 @@ impl<'a> TryFrom<&'a str> for TargetFreq {
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         match value {
-            "lo" | "low" | "min" | "minimum" | "idle" => Ok(TargetFreq::Min),
+            "lo" | "low"  | "min" | "minimum" | "idle" => Ok(TargetFreq::Min),
             "hi" | "high" | "max" | "maximum" | "full" => Ok(TargetFreq::Max),
+            "current" => Ok(TargetFreq::Current),
             _ => value.parse()
                 .map(|x| TargetFreq::Abs(x))
                 .map_err(|_| AppError::ArgNotValidFormat)
@@ -73,19 +75,22 @@ fn main() -> Result<(), AppError> {
     println!("current clock speed: {current_clock} MHz");
 
     let msg = match target_freq {
-        TargetFreq::Min => ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::LongIdle)),
-        TargetFreq::Max => ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::Busy)),
-        TargetFreq::Abs(arg) => ArcMsg::Raw {
+        TargetFreq::Min => Some(ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::LongIdle))),
+        TargetFreq::Max => Some(ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::Busy))),
+        TargetFreq::Abs(arg) => Some(ArcMsg::Raw {
             msg: 0x33,
             arg0: (arg & 0xFFFF) as u16,
             arg1: ((arg >> 16) & 0xFFFF) as u16
-        }
+        }),
+        TargetFreq::Current => None
     };
 
-    chip.inner.arc_msg(ArcMsgOptions {
-        msg,
-        ..Default::default()
-    })?;
+    if let Some(msg) = msg {
+        chip.inner.arc_msg(ArcMsgOptions {
+            msg,
+            ..Default::default()
+        })?;
+    }
 
     let current_clock = chip.inner.get_telemetry()?.ai_clk();
     println!("new actual clock speed: {current_clock} MHz");
