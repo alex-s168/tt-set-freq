@@ -1,4 +1,4 @@
-use luwen_if::{chip::{ArcMsgOptions, Chip, Telemetry}, ArcMsg, CallbackStorage, PowerState, TypedArcMsg};
+use luwen_if::{chip::{ArcMsgOptions, Chip}, ArcMsg, CallbackStorage, PowerState, TypedArcMsg};
 use luwen_ref::{error::LuwenError, ExtendedPciDevice, PciDevice};
 use thiserror::Error;
 
@@ -21,6 +21,7 @@ enum TargetFreq {
     Min,
     Max,
     Current,
+    Reset,
     Abs(u32),
 }
 
@@ -32,10 +33,19 @@ impl<'a> TryFrom<&'a str> for TargetFreq {
             "lo" | "low"  | "min" | "minimum" | "idle" => Ok(TargetFreq::Min),
             "hi" | "high" | "max" | "maximum" | "full" => Ok(TargetFreq::Max),
             "current" => Ok(TargetFreq::Current),
+            "reset" => Ok(TargetFreq::Reset),
             _ => value.parse()
                 .map(|x| TargetFreq::Abs(x))
                 .map_err(|_| AppError::ArgNotValidFormat)
         }
+    }
+}
+
+fn set_power_state_abs(arg: u32) -> ArcMsg {
+    ArcMsg::Raw {
+        msg: 0x33,
+        arg0: (arg & 0xFFFF) as u16,
+        arg1: ((arg >> 16) & 0xFFFF) as u16
     }
 }
 
@@ -84,17 +94,26 @@ fn main() -> Result<(), AppError> {
 
     println!("\nfound {arch} at PCI device {target_dev}");
     let current_clock = telem.ai_clk();
-    println!("current clock speed: {current_clock} MHz");
+    println!("clock speed before changing: {current_clock} MHz");
+
+    match target_freq {
+        TargetFreq::Min |
+        TargetFreq::Max |
+        TargetFreq::Reset => {
+            chip.inner.arc_msg(ArcMsgOptions {
+                msg: set_power_state_abs(0),
+                ..Default::default()
+            })?;
+        }
+        _ => ()
+    };
 
     let msg = match target_freq {
         TargetFreq::Min => Some(ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::LongIdle))),
         TargetFreq::Max => Some(ArcMsg::Typed(TypedArcMsg::SetPowerState(PowerState::Busy))),
-        TargetFreq::Abs(arg) => Some(ArcMsg::Raw {
-            msg: 0x33,
-            arg0: (arg & 0xFFFF) as u16,
-            arg1: ((arg >> 16) & 0xFFFF) as u16
-        }),
-        TargetFreq::Current => None
+        TargetFreq::Abs(arg) => Some(set_power_state_abs(arg)),
+        TargetFreq::Current => None,
+        TargetFreq::Reset => None,
     };
 
     if let Some(msg) = msg {
@@ -103,9 +122,6 @@ fn main() -> Result<(), AppError> {
             ..Default::default()
         })?;
     }
-
-    let current_clock = chip.inner.get_telemetry()?.ai_clk();
-    println!("new actual clock speed: {current_clock} MHz");
 
     Ok(())
 }
