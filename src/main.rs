@@ -1,4 +1,4 @@
-use luwen_if::{chip::{ArcMsgOptions, Chip}, ArcMsg, CallbackStorage, PowerState, TypedArcMsg};
+use luwen_if::{chip::{ArcMsgOptions, Chip, Telemetry}, ArcMsg, CallbackStorage, PowerState, TypedArcMsg};
 use luwen_ref::{error::LuwenError, ExtendedPciDevice, PciDevice};
 use thiserror::Error;
 
@@ -67,7 +67,19 @@ fn main() -> Result<(), AppError> {
     let telem = chip.inner.get_telemetry()?;
 
     if dump_telem {
-        println!("{:?}", telem);
+        println!("{:#?}", telem);
+
+        println!("AI_CLK: {}", telem.ai_clk());
+        println!("AXI_CLK: {}", telem.axi_clk());
+        println!("ARC_CLK: {}", telem.arc_clk());
+        println!("ASIC voltage: {}", telem.voltage());
+        println!("ASIC temp: {}", telem.asic_temperature());
+        println!("voltage regulator temp: {}", telem.vreg_temperature());
+        println!("inlinet temp: {}", telem.inlet_temperature());
+        println!("outline temp 1: {}", telem.outlet_temperature1());
+        println!("outline temp 2: {}", telem.outlet_temperature2());
+        println!("power: {}", telem.power());
+        println!("current: {}", telem.current());
     }
 
     println!("\nfound {arch} at PCI device {target_dev}");
